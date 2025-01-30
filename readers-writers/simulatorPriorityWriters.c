@@ -15,6 +15,7 @@ typedef struct {
     int nWritersProcess;
     int nReadersReading;
     int nWritersWriting; // Only 0 or 1
+    int nWritersForWrite;
     int buffer[SIZE_BUFFER];
 } shareMem;
 
@@ -39,20 +40,21 @@ void createResources(int *idShm, int *idSems, shareMem **shMem, int key) {
     (*shMem)->nWritersProcess = 0;
     (*shMem)->nReadersReading = 0;
     (*shMem)->nWritersWriting = 0;
+    (*shMem)->nWritersForWrite = 0;
     
-    *idSems = semget(key, 4, IPC_CREAT | IPC_EXCL | 0600);
+    *idSems = semget(key, 6, IPC_CREAT | IPC_EXCL | 0600);
     if (*idSems == -1) {
         shmctl(*idShm, IPC_RMID, NULL);
         errorSimulator("The semaphores haven't created.");
     }
 
-    struct sembuf sops[4]; // 0: mutexReaders; 1: mutexWriters; 2: mutexNReaders; 3: mutexNWriters
-    for (int i = 0; i < 4; i++) {
+    struct sembuf sops[6]; // 0: mutexReaders; 1: mutexWriters; 2: mutexReadTry; 3: mutexVarWriter 4: mutexNReaders; 5: mutexNWriters
+    for (int i = 0; i < 6; i++) {
         sops[i].sem_num = i;
         sops[i].sem_op = 1;
         sops[i].sem_flg = 0;
     }
-    semop(*idSems, sops, 4);
+    semop(*idSems, sops, 6);
 }
 
 void freeAllResources(int idSems, int idShm) {
@@ -61,13 +63,18 @@ void freeAllResources(int idSems, int idShm) {
 }
 
 void reader(int idSems, shareMem *shMem, int timeS) {
-    struct sembuf sopsMutexReader, sopsMutexWriter, sopsMutexNReader;
+    struct sembuf sopsMutexReader, sopsMutexWriter, sopsMutexReadTry, sopsMutexNReader;
+
+    // ENTRY SECTION
+    sopsMutexReadTry.sem_num = 2;
+    sopsMutexReadTry.sem_op = -1;
+    sopsMutexReadTry.sem_flg = 0;
+    semop(idSems, &sopsMutexReadTry, 1); // INPUT SECTION
 
     sopsMutexReader.sem_num = 0;
     sopsMutexReader.sem_op = -1;
     sopsMutexReader.sem_flg = 0;
     semop(idSems, &sopsMutexReader, 1); // INPUT SECTION
-
     if (shMem->nReadersReading == 0) { // CRITICAL SECTION
         sopsMutexWriter.sem_num = 1;
         sopsMutexWriter.sem_op = -1;
@@ -75,21 +82,25 @@ void reader(int idSems, shareMem *shMem, int timeS) {
         semop(idSems, &sopsMutexWriter, 1);
     }
     shMem->nReadersReading++;
-
     sopsMutexReader.sem_num = 0; // OUTPUT SECTION
     sopsMutexReader.sem_op = 1;
     sopsMutexReader.sem_flg = 0;
     semop(idSems, &sopsMutexReader, 1);
+
+    sopsMutexReadTry.sem_num = 2; // OUTPUT SECTION
+    sopsMutexReadTry.sem_op = 1;
+    sopsMutexReadTry.sem_flg = 0;
+    semop(idSems, &sopsMutexReadTry, 1);
     
-    // Reading...
+    // READ SECTION
     usleep(timeS);
     int valueRead = shMem->buffer[rand() % SIZE_BUFFER];
 
+    // EXIT SECTION
     sopsMutexReader.sem_num = 0;
     sopsMutexReader.sem_op = -1;
     sopsMutexReader.sem_flg = 0;
     semop(idSems, &sopsMutexReader, 1); // INPUT SECTION
-    
     shMem->nReadersReading--; // CRITICAL SECTION
     if (shMem->nReadersReading == 0) {
         sopsMutexWriter.sem_num = 1;
@@ -97,21 +108,18 @@ void reader(int idSems, shareMem *shMem, int timeS) {
         sopsMutexWriter.sem_flg = 0;
         semop(idSems, &sopsMutexWriter, 1);
     }
-
     sopsMutexReader.sem_num = 0; // OUTPUT SECTION
     sopsMutexReader.sem_op = 1;
     sopsMutexReader.sem_flg = 0;
     semop(idSems, &sopsMutexReader, 1);
 
     // Section for nReadersProcess--
-    sopsMutexNReader.sem_num = 2;
+    sopsMutexNReader.sem_num = 4;
     sopsMutexNReader.sem_op = -1;
     sopsMutexNReader.sem_flg = 0;
     semop(idSems, &sopsMutexNReader, 1); // INPUT SECTION
-
     shMem->nReadersProcess--; // CRITICAL SECTION
-
-    sopsMutexNReader.sem_num = 2; // OUTPUT SECTION
+    sopsMutexNReader.sem_num = 4; // OUTPUT SECTION
     sopsMutexNReader.sem_op = 1;
     sopsMutexNReader.sem_flg = 0;
     semop(idSems, &sopsMutexNReader, 1);
@@ -121,8 +129,26 @@ void reader(int idSems, shareMem *shMem, int timeS) {
 }
 
 void writer(int idSems, shareMem *shMem, int timeS) {
-    struct sembuf sopsMutexWriter, sopsMutexNWriter;
-    
+    struct sembuf sopsMutexWriter, sopsMutexVarWriter, sopsMutexReadTry, sopsMutexNWriter;
+
+    // ENTRY SECTION
+    sopsMutexVarWriter.sem_num = 3;
+    sopsMutexVarWriter.sem_op = -1;
+    sopsMutexVarWriter.sem_flg = 0;
+    semop(idSems, &sopsMutexVarWriter, 1); // INPUT SECTION
+    if (shMem->nWritersForWrite == 0) { // CRITICAL SECTION
+        sopsMutexReadTry.sem_num = 2;
+        sopsMutexReadTry.sem_op = -1;
+        sopsMutexReadTry.sem_flg = 0;
+        semop(idSems, &sopsMutexReadTry, 1);
+    }
+    shMem->nWritersForWrite++;
+    sopsMutexVarWriter.sem_num = 3; // OUTPUT SECTION
+    sopsMutexVarWriter.sem_op = 1;
+    sopsMutexVarWriter.sem_flg = 0;
+    semop(idSems, &sopsMutexVarWriter, 1);
+
+    // WRITE SECTION
     sopsMutexWriter.sem_num = 1;
     sopsMutexWriter.sem_op = -1;
     sopsMutexWriter.sem_flg = 0;
@@ -138,15 +164,30 @@ void writer(int idSems, shareMem *shMem, int timeS) {
     sopsMutexWriter.sem_flg = 0;
     semop(idSems, &sopsMutexWriter, 1);
 
+    // EXIT SECTION
+    sopsMutexVarWriter.sem_num = 3;
+    sopsMutexVarWriter.sem_op = -1;
+    sopsMutexVarWriter.sem_flg = 0;
+    semop(idSems, &sopsMutexVarWriter, 1); // INPUT SECTION
+    shMem->nWritersForWrite--;
+    if (shMem->nWritersForWrite == 0) { // CRITICAL SECTION
+        sopsMutexReadTry.sem_num = 2;
+        sopsMutexReadTry.sem_op = 1;
+        sopsMutexReadTry.sem_flg = 0;
+        semop(idSems, &sopsMutexReadTry, 1);
+    }
+    sopsMutexVarWriter.sem_num = 3; // OUTPUT SECTION
+    sopsMutexVarWriter.sem_op = 1;
+    sopsMutexVarWriter.sem_flg = 0;
+    semop(idSems, &sopsMutexVarWriter, 1);
+
     // Section for nWritersProcess--
-    sopsMutexNWriter.sem_num = 3;
+    sopsMutexNWriter.sem_num = 5;
     sopsMutexNWriter.sem_op = -1;
     sopsMutexNWriter.sem_flg = 0;
     semop(idSems, &sopsMutexNWriter, 1); // INPUT SECTION
-
     shMem->nWritersProcess--;
-
-    sopsMutexNWriter.sem_num = 3; // OUTPUT SECTION
+    sopsMutexNWriter.sem_num = 5; // OUTPUT SECTION
     sopsMutexNWriter.sem_op = 1;
     sopsMutexNWriter.sem_flg = 0;
     semop(idSems, &sopsMutexNWriter, 1);
@@ -260,12 +301,12 @@ void simulate(int *pids, int nReaders, int nWriters, shareMem *shMem, int idSems
  *          maxMicroSecWriters: The maximum ...
  * EXAMPLE:
  *      Key: 123
- *      Number of the readers process = 3000
+ *      Number of the readers process = 5000
  *      Time waiting readers process = [8s, 10s]
- *      Number of the writers process = 2000
- *      Time waiting writers process = [1ms, 5ms]
+ *      Number of the writers process = 50
+ *      Time waiting writers process = [20ms, 50ms]
  * 
- *      sudo ./sim 123 3000 8000000 10000000 2000 1000 5000
+ *      sudo ./sim 123 5000 8000000 10000000 50 20000 50000
  */
 int main(int argc, char **argv) {
     if (argc != 8)
