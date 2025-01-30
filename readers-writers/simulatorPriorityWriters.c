@@ -198,37 +198,20 @@ void writer(int idSems, shareMem *shMem, int timeS) {
 
 void createProcess(int *pids, int nReaders, int minMicroSecReaders, int maxMicroSecReaders, int nWriters, int minMicroSecWriters, int maxMicroSecWriters, shareMem *shMem, int idSems) {
     printf("Creating process...\n");
-    
-    pid_t pidChild;
-    int processType, cont; // 0: Producer; 1: Consumer
-
-    cont = 0;
     shMem->nReadersProcess = nReaders;
     shMem->nWritersProcess = nWriters;
-    while (nReaders > 0 && nWriters > 0) {
-        processType = rand() % 2;
-        pidChild = fork();
-        if (pidChild == 0) {
-            kill(getpid(), SIGSTOP);
-            if (processType == 0) { // Reader
-                reader(idSems, shMem, rand() % (maxMicroSecReaders - minMicroSecReaders + 1) + minMicroSecReaders);
-            }
-            else { // Writer
-                writer(idSems, shMem, rand() % (maxMicroSecWriters - minMicroSecWriters + 1) + minMicroSecWriters);
-            }
-        }
-        else if (pidChild != -1) {
-            if (processType == 0) {
-                nReaders--;
-            }
-            else {
-                nWriters--;
-            }
-            pids[cont] = pidChild;
-            cont++;
-        }
+
+    int end_pos = nReaders + nWriters - 1;
+    int *randomPositions = (int *) (malloc(sizeof(nReaders + nWriters)));
+    if (randomPositions == NULL)
+        errorSimulator("There isn't memory in the system for malloc");
+    
+    for (int i = 0; i < nReaders + nWriters; i++) {
+        randomPositions[i] = i;
     }
 
+    int pos, aux;
+    pid_t pidChild;
     while (nReaders > 0) {
         pidChild = fork();
         if (pidChild == 0) {
@@ -236,8 +219,13 @@ void createProcess(int *pids, int nReaders, int minMicroSecReaders, int maxMicro
             reader(idSems, shMem, rand() % (maxMicroSecReaders - minMicroSecReaders + 1) + minMicroSecReaders);
         }
         else if (pidChild != -1) {
-            pids[cont] = pidChild;
-            cont++;
+            pos = rand() % (end_pos + 1);
+            pids[randomPositions[pos]] = pidChild;
+
+            aux = randomPositions[pos];
+            randomPositions[pos] = randomPositions[end_pos];
+            randomPositions[end_pos] = aux;
+            end_pos--;
             nReaders--;
         }
     }
@@ -247,13 +235,20 @@ void createProcess(int *pids, int nReaders, int minMicroSecReaders, int maxMicro
         if (pidChild == 0) {
             kill(getpid(), SIGSTOP);
             writer(idSems, shMem, rand() % (maxMicroSecWriters - minMicroSecWriters + 1) + minMicroSecWriters);
-        } 
+        }
         else if (pidChild != -1) {
-            pids[cont] = pidChild;
-            cont++;
+            pos = rand() % (end_pos + 1);
+            pids[randomPositions[pos]] = pidChild;
+
+            aux = randomPositions[pos];
+            randomPositions[pos] = randomPositions[end_pos];
+            randomPositions[end_pos] = aux;
+            end_pos--;
             nWriters--;
         }
     }
+
+    free(randomPositions);
 }
 
 void simulate(int *pids, int nReaders, int nWriters, shareMem *shMem, int idSems, int idShm) {
@@ -306,12 +301,12 @@ void simulate(int *pids, int nReaders, int nWriters, shareMem *shMem, int idSems
  *          maxMicroSecWriters: The maximum ...
  * EXAMPLE:
  *      Key: 123
- *      Number of the readers process = 3000
+ *      Number of the readers process = 5000
  *      Time waiting readers process = [8s, 10s]
- *      Number of the writers process = 2000
- *      Time waiting writers process = [1ms, 5ms]
+ *      Number of the writers process = 50
+ *      Time waiting writers process = [20ms, 50ms]
  * 
- *      sudo ./sim 123 3000 8000000 10000000 2000 1000 5000
+ *      sudo ./sim 123 5000 8000000 10000000 50 20000 50000
  */
 int main(int argc, char **argv) {
     if (argc != 8)
