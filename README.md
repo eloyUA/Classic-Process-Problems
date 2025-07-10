@@ -16,7 +16,7 @@ This repository contains solutions to classic process synchronization problems:
 
 #### Explanation
 In this problem, there are two types of processes: **Producer** and **Consumer**.
-Additionally, there is a buffer with `N` positions: `{b0, b1, ..., bN}`.
+Additionally, there is a buffer with `N` positions: `{b1, ..., bN}`.
 
 - The **Producer** process places a value in the buffer.
 - The **Consumer** process retrieves a value from the buffer.
