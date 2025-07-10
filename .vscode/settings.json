@@ -1,7 +1,0 @@
-{
-    "files.associations": {
-        "sem.h": "c",
-        "unistd.h": "c",
-        "stdbool.h": "c"
-    }
-}
