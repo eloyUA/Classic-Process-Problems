@@ -46,7 +46,14 @@ void createResources(int *idShm, int *idSems, shareMem **shMem, int key) {
         errorSimulator("The semaphores haven't created.");
     }
 
-    struct sembuf sops[4]; // 0: mutexReaders; 1: mutexWriters; 2: mutexNReaders; 3: mutexNWriters
+    /**
+     * In "struct sembuf sops[4]":
+     *  0: mutexReaders
+     *  1: mutexWriters
+     *  2: mutexNReaders
+     *  3: mutexNWriters
+     */
+    struct sembuf sops[4];
     for (int i = 0; i < 4; i++) {
         sops[i].sem_num = i;
         sops[i].sem_op = 1;
@@ -155,7 +162,9 @@ void writer(int idSems, shareMem *shMem, int timeS) {
     exit(0);
 }
 
-void createProcess(int *pids, int nReaders, int minMicroSecReaders, int maxMicroSecReaders, int nWriters, int minMicroSecWriters, int maxMicroSecWriters, shareMem *shMem, int idSems) {
+void createProcess(int *pids, int nReaders, int minMicroSecReaders,
+                    int maxMicroSecReaders, int nWriters, int minMicroSecWriters,
+                    int maxMicroSecWriters, shareMem *shMem, int idSems) {
     printf("Creating process...\n");
     shMem->nReadersProcess = nReaders;
     shMem->nWritersProcess = nWriters;
@@ -175,7 +184,11 @@ void createProcess(int *pids, int nReaders, int minMicroSecReaders, int maxMicro
         pidChild = fork();
         if (pidChild == 0) {
             kill(getpid(), SIGSTOP);
-            reader(idSems, shMem, rand() % (maxMicroSecReaders - minMicroSecReaders + 1) + minMicroSecReaders);
+            reader(
+                idSems,
+                shMem,
+                rand() % (maxMicroSecReaders - minMicroSecReaders + 1) + minMicroSecReaders
+            );
         }
         else if (pidChild != -1) {
             pos = rand() % (end_pos + 1);
@@ -193,7 +206,11 @@ void createProcess(int *pids, int nReaders, int minMicroSecReaders, int maxMicro
         pidChild = fork();
         if (pidChild == 0) {
             kill(getpid(), SIGSTOP);
-            writer(idSems, shMem, rand() % (maxMicroSecWriters - minMicroSecWriters + 1) + minMicroSecWriters);
+            writer(
+                idSems,
+                shMem,
+                rand() % (maxMicroSecWriters - minMicroSecWriters + 1) + minMicroSecWriters
+            );
         }
         else if (pidChild != -1) {
             pos = rand() % (end_pos + 1);
@@ -238,10 +255,12 @@ void simulate(int *pids, int nReaders, int nWriters, shareMem *shMem, int idSems
         printf("Readers process reading: %d\n", shMem->nReadersReading);
         printf("Writers process writing: %d\n", shMem->nWritersWriting);
         printf("Size buffer: %d\n", SIZE_BUFFER);
-        printf("Readers process: %d; Writers process: %d\n", shMem->nReadersProcess, shMem->nWritersProcess);
+        printf("Readers process: %d; Writers process: %d\n",
+            shMem->nReadersProcess, shMem->nWritersProcess);
         
         gettimeofday(&time_end, NULL);
-        diff = (time_end.tv_sec - time_start.tv_sec) + (time_end.tv_usec - time_start.tv_usec) / 1000000.0;
+        diff = (time_end.tv_sec - time_start.tv_sec);
+        diff += (time_end.tv_usec - time_start.tv_usec) / 1000000.0;
         printf("Time: %.2lfseg\n", diff);
     } while (shMem->nReadersProcess > 0 || shMem->nWritersProcess > 0);
 
@@ -250,13 +269,16 @@ void simulate(int *pids, int nReaders, int nWriters, shareMem *shMem, int idSems
 
 /**
  * DESCRIPTION:
- *      Arguments: ./simulator key_t nReaders minMicroSecReaders maxMicroSecReaders nWriters minMicroSecWriters maxMicroSecWriters
+ *      Arguments: ./simulator key_t nReaders minMicroSecReaders maxMicroSecReaders
+ *                                   nWriters minMicroSecWriters maxMicroSecWriters
  *          key_t: The key for shared memory and semaphores
  *          nReaders: Number of readers process
- *          minMicroSecReaders: The minimum micro seconds that the readers process waiting when reading buffer
+ *          minMicroSecReaders: The minimum micro seconds that the readers process
+ *                              waiting when reading buffer
  *          maxMicroSecReaders: The maximum ...
  *          nWriters: Number of writers process
- *          minMicroSecWriters: The minimum micro seconds that the writers process waiting when writing a value from buffer
+ *          minMicroSecWriters: The minimum micro seconds that the writers process
+ *                              waiting when writing a value from buffer
  *          maxMicroSecWriters: The maximum ...
  * EXAMPLE:
  *      Key: 123
@@ -298,7 +320,8 @@ int main(int argc, char **argv) {
 
     srand(time(NULL));
     createResources(&idShm, &idSems, &shMem, key);
-    createProcess(pids, nReaders, minMicroSecReaders, maxMicroSecReaders, nWriters, minMicroSecWriters, maxMicroSecWriters, shMem, idSems);
+    createProcess(pids, nReaders, minMicroSecReaders, maxMicroSecReaders, nWriters,
+        minMicroSecWriters, maxMicroSecWriters, shMem, idSems);
     simulate(pids, nReaders, nWriters, shMem, idSems, idShm);
 
     return 0;

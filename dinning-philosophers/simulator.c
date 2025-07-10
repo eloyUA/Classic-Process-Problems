@@ -50,7 +50,17 @@ void createResources(int *idShm, int *idSems, shareMem **shMem, int key, int nPh
         errorSimulator("The semaphores haven't created.");
     }
 
-    struct sembuf sops[nPhilosophers + 3]; // 0: mutex; 1: mutexNPhiloWating; 2: mutexNPhiloEating; 3: philo1; 4: philo2; ... ; N: philo(nPhilosophers)
+    /**
+     * In "struct sembuf sops[nPhilosophers + 3]":
+     *  0: mutex
+     *  1: mutexNPhiloWating
+     *  2: mutexNPhiloEating
+     *  3: philo1
+     *  4: philo2
+     *  ...
+     *  N: philo(nPhilosophers)
+     */
+    struct sembuf sops[nPhilosophers + 3];
     for (int i = 0; i < 3; i++) {
         sops[i].sem_num = i;
         sops[i].sem_op = 1;
@@ -99,9 +109,10 @@ void takeForks(int idPhilo, int idSems, shareMem *shMem) {
     sopsMutex.sem_flg = 0;
     semop(idSems, &sopsMutex, 1);
 
-    if (shMem->states[rightPhilo(idPhilo, shMem)] != EATING && shMem->states[leftPhilo(idPhilo, shMem)] != EATING) {
-        shMem->states[idPhilo] = EATING;
+    if (shMem->states[rightPhilo(idPhilo, shMem)] != EATING &&
+        shMem->states[leftPhilo(idPhilo, shMem)] != EATING) {
 
+        shMem->states[idPhilo] = EATING;
         sopsTaken.sem_num = idPhiloSems(idPhilo);
         sopsTaken.sem_op = 1;
         sopsTaken.sem_flg = 0;
@@ -159,9 +170,11 @@ void eat(int timeS, int idPhilo, int idSems, shareMem *shMem) {
 
 void test(int idPhilo, int idSems, shareMem *shMem) {
     struct sembuf sopsTaken;
-    if (shMem->states[idPhilo] == HUNGRY && shMem->states[rightPhilo(idPhilo, shMem)] != EATING && shMem->states[leftPhilo(idPhilo, shMem)] != EATING) {
+    if (shMem->states[idPhilo] == HUNGRY &&
+        shMem->states[rightPhilo(idPhilo, shMem)] != EATING &&
+        shMem->states[leftPhilo(idPhilo, shMem)] != EATING) {
+
         shMem->states[idPhilo] = EATING;
-        
         sopsTaken.sem_num = idPhiloSems(idPhilo);
         sopsTaken.sem_op = 1;
         sopsTaken.sem_flg = 0;
@@ -193,7 +206,8 @@ void philosopher(int idPhilo, int idSems, shareMem *shMem, int timeS) {
     putForks(idPhilo, idSems, shMem);
 }
 
-void createProcess(int *pids, int nPhilosophers, int minMicroSec, int maxMicroSec, shareMem *shMem, int idSems) {
+void createProcess(int *pids, int nPhilosophers, int minMicroSec, int maxMicroSec,
+                    shareMem *shMem, int idSems) {
     printf("Creating process...\n");
     shMem->nPhilosophers = nPhilosophers;
 
@@ -202,7 +216,8 @@ void createProcess(int *pids, int nPhilosophers, int minMicroSec, int maxMicroSe
         pidChild = fork();
         if (pidChild == 0) {
             kill(getpid(), SIGSTOP);
-            philosopher(i, idSems, shMem, rand() % (maxMicroSec - minMicroSec + 1) + minMicroSec);
+            philosopher(i, idSems, shMem,
+                rand() % (maxMicroSec - minMicroSec + 1) + minMicroSec);
             exit(0);
         }
     }
@@ -238,7 +253,8 @@ void simulate(int *pids, int nPhilosophers, shareMem *shMem, int idSems, int idS
         printf("Size buffer: %d\n", shMem->nPhilosophers);
         
         gettimeofday(&time_end, NULL);
-        diff = (time_end.tv_sec - time_start.tv_sec) + (time_end.tv_usec - time_start.tv_usec) / 1000000.0;
+        diff = (time_end.tv_sec - time_start.tv_sec);
+        diff += (time_end.tv_usec - time_start.tv_usec) / 1000000.0;
         printf("Time: %.2lfseg\n", diff);
     } while (shMem->nPhiloWating > 0 || shMem->nPhiloEating > 0);
 
@@ -250,7 +266,8 @@ void simulate(int *pids, int nPhilosophers, shareMem *shMem, int idSems, int idS
  *      Arguments: ./simulator key_t nPhilosophers minMicroSec maxMicroSec
  *          key_t: The key for shared memory and semaphores
  *          nPhilosophers: Number of philosophers process
- *          minMicroSec: The minimum micro seconds that the philosophers process waiting when eating or thinking
+ *          minMicroSec: The minimum micro seconds that the philosophers process
+ *                       waiting when eating or thinking
  *          maxMicroSec: The maximum ...
  * EXAMPLE:
  *      Key: 123

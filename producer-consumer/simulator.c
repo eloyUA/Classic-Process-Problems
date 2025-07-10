@@ -46,7 +46,16 @@ void createResources(int *idShm, int *idSems, shareMem **shMem, int key) {
         errorSimulator("The semaphores haven't created.");
     }
 
-    struct sembuf sops[6]; // 0: mutexProducer; 1: mutexConsumer; 2: numberEmpty; 3: numberFull; 4: mutexNProd; 5: mutexNCons
+    /**
+     * In "struct sembuf sops[6]":
+     *  0: mutexProducer
+     *  1: mutexConsumer
+     *  2: numberEmpty
+     *  3: numberFull
+     *  4: mutexNProd
+     *  5: mutexNCons
+     */
+    struct sembuf sops[6];
     sops[0].sem_num = 0;
     sops[0].sem_op = 1;
     sops[0].sem_flg = 0;
@@ -163,7 +172,9 @@ void consumer(int idSems, shareMem *shMem, int timeS) {
     exit(0);
 }
 
-void createProcess(int *pids, int nProd, int minMicroSecProd, int maxMicroSecProd, int nCons, int minMicroSecCons, int maxMicroSecCons, shareMem *shMem, int idSems) {
+void createProcess(int *pids, int nProd, int minMicroSecProd, int maxMicroSecProd,
+                    int nCons, int minMicroSecCons, int maxMicroSecCons,
+                    shareMem *shMem, int idSems) {
     printf("Creating process...\n");
     srand(time(NULL));
     pid_t pidChild;
@@ -179,10 +190,18 @@ void createProcess(int *pids, int nProd, int minMicroSecProd, int maxMicroSecPro
         if (pidChild == 0) {
             kill(getpid(), SIGSTOP);
             if (processType == 0) { // Producer
-                producer(idSems, shMem, rand() % (maxMicroSecProd - minMicroSecProd + 1) + minMicroSecProd);
+                producer(
+                    idSems,
+                    shMem,
+                    rand() % (maxMicroSecProd - minMicroSecProd + 1) + minMicroSecProd
+                );
             }
             else { // Consumer
-                consumer(idSems, shMem, rand() % (maxMicroSecCons - minMicroSecCons + 1) + minMicroSecCons);
+                consumer(
+                    idSems,
+                    shMem,
+                    rand() % (maxMicroSecCons - minMicroSecCons + 1) + minMicroSecCons
+                );
             }
         }
         else if (pidChild != -1) {
@@ -201,7 +220,11 @@ void createProcess(int *pids, int nProd, int minMicroSecProd, int maxMicroSecPro
         pidChild = fork();
         if (pidChild == 0) {
             kill(getpid(), SIGSTOP);
-            producer(idSems, shMem, rand() % (maxMicroSecProd - minMicroSecProd + 1) + minMicroSecProd);
+            producer(
+                idSems,
+                shMem,
+                rand() % (maxMicroSecProd - minMicroSecProd + 1) + minMicroSecProd
+            );
         }
         else if (pidChild != -1) {
             pids[cont] = pidChild;
@@ -214,7 +237,11 @@ void createProcess(int *pids, int nProd, int minMicroSecProd, int maxMicroSecPro
         pidChild = fork();
         if (pidChild == 0) {
             kill(getpid(), SIGSTOP);
-            consumer(idSems, shMem, rand() % (maxMicroSecCons - minMicroSecCons + 1) + minMicroSecCons);
+            consumer(
+                idSems,
+                shMem,
+                rand() % (maxMicroSecCons - minMicroSecCons + 1) + minMicroSecCons
+            );
         } 
         else if (pidChild != -1) {
             pids[cont] = pidChild;
@@ -254,9 +281,12 @@ void simulate(int *pids, int nProd, int nCons, shareMem *shMem, int idSems, int 
         printf("Producers process: %d; Consumer process: %d\n", shMem->nProc, shMem->nCons);
         
         gettimeofday(&time_end, NULL);
-        diff = (time_end.tv_sec - time_start.tv_sec) + (time_end.tv_usec - time_start.tv_usec) / 1000000.0;
+        diff = (time_end.tv_sec - time_start.tv_sec);
+        diff += (time_end.tv_usec - time_start.tv_usec) / 1000000.0;
         printf("Time: %.2lfseg\n", diff);
-    } while (!(shMem->nCons > 0 && shMem->nProc == 0 && shMem->products == 0) && !(shMem->nProc > 0 && shMem->nCons == 0 && shMem->products == SIZE_BUFFER) && (shMem->nProc > 0 || shMem->nCons > 0));
+    } while (!(shMem->nCons > 0 && shMem->nProc == 0 && shMem->products == 0) &&
+            !(shMem->nProc > 0 && shMem->nCons == 0 && shMem->products == SIZE_BUFFER)
+            && (shMem->nProc > 0 || shMem->nCons > 0));
 
     int result;
     for (int i = 0; i < nProd + nCons; i++) {
@@ -270,13 +300,16 @@ void simulate(int *pids, int nProd, int nCons, shareMem *shMem, int idSems, int 
 
 /**
  * DESCRIPTION:
- *      Arguments: ./simulator key_t nProd minMicroSecProd maxMicroSecProd nCons minMicroSecCons maxMicroSecCons
+ *      Arguments: ./simulator key_t nProd minMicroSecProd maxMicroSecProd nCons
+ *                             minMicroSecCons maxMicroSecCons
  *          key_t: The key for shared memory and semaphores
  *          nProd: Number of producer process
- *          minMicroSecProd: The minimum micro seconds that the producer process waiting when the product is put in the buffer
+ *          minMicroSecProd: The minimum micro seconds that the producer process
+ *                           waiting when the product is put in the buffer
  *          maxMicroSecProd: The maximum ...
  *          nCons: Number of consumer process
- *          minMicroSecCons: The minimum micro seconds that the consumer process waiting when the product is catch in the buffer
+ *          minMicroSecCons: The minimum micro seconds that the consumer process
+ *                           waiting when the product is catch in the buffer
  *          maxMicroSecCons: The maximum ...
  * EXAMPLE:
  *      Key: 123
@@ -317,7 +350,8 @@ int main(int argc, char **argv) {
     int *pids = (int *) (malloc((nProd + nCons) * sizeof(int)));
 
     createResources(&idShm, &idSems, &shMem, key);
-    createProcess(pids, nProd, minMicroSecProd, maxMicroSecProd, nCons, minMicroSecCons, maxMicroSecCons, shMem, idSems);
+    createProcess(pids, nProd, minMicroSecProd, maxMicroSecProd, nCons,
+        minMicroSecCons, maxMicroSecCons, shMem, idSems);
     simulate(pids, nProd, nCons, shMem, idSems, idShm);
 
     return 0;
